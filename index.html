@@ -165,8 +165,13 @@
                     { name: 'Netflix', amount: 74.42, tags: ['Sub'], payment: 'MOX Credit' },
                 ];
 
-                const getTodayStr = () => new Date().toISOString().split('T')[0];
-
+                const getTodayStr = () => {
+                    const now = new Date();
+                    const offset = now.getTimezoneOffset() * 60000; 
+                    const localISOTime = (new Date(now - offset)).toISOString().split('T')[0];
+                    return localISOTime;
+                };
+                
                 const initEntry = () => ({
                     id: Date.now(),
                     rawAmount: '', amount: 0, tags: [], payment: 'Cash', 
