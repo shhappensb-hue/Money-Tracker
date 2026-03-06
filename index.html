@@ -3,13 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>極簡記帳 LazyTracker v6</title>
+    <title>極簡記帳 LazyTracker v7</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         [v-cloak] { display: none; }
         ::-webkit-scrollbar { display: none; }
-        /* 優化日期選擇器樣式 */
         input[type="date"] { appearance: none; -webkit-appearance: none; }
     </style>
 </head>
@@ -39,7 +38,7 @@
                 <div>
                     <div class="text-[10px] opacity-50 uppercase font-bold mb-2">By Cards</div>
                     <div v-for="(val, card) in cardStats" :key="card" class="text-xs flex justify-between mb-1">
-                        <span class="opacity-80 text-clip truncate mr-1">{{ card }}</span>
+                        <span class="opacity-80 truncate mr-1">{{ card }}</span>
                         <span class="font-mono font-bold text-green-400">${{ val }}</span>
                     </div>
                 </div>
@@ -53,12 +52,13 @@
             </button>
         </div>
 
-        <div class="bg-white rounded-[2rem] shadow-sm p-6 mb-8 border border-gray-100">
+        <div class="bg-white rounded-[2rem] shadow-sm p-6 mb-8 border border-gray-100 ring-4 ring-transparent transition-all" :class="isEditing ? 'ring-blue-100 border-blue-200' : ''">
             <div class="space-y-5">
-                <div>
+                <div class="flex justify-between items-center">
                     <input type="text" v-model="entry.rawAmount" @blur="calcAmount" 
                            placeholder="0.00"
                            class="w-full text-5xl font-black border-none focus:ring-0 outline-none p-0 text-black placeholder-gray-100">
+                    <span v-if="isEditing" class="text-[10px] bg-blue-500 text-white px-2 py-1 rounded-md font-bold">EDITING</span>
                 </div>
 
                 <div class="flex flex-wrap gap-2">
@@ -70,20 +70,30 @@
                     </button>
                 </div>
 
-                <details class="group">
+                <details class="group" :open="isEditing">
                     <summary class="text-xs text-gray-400 cursor-pointer list-none flex items-center font-bold uppercase tracking-widest">
-                        Details (Date / Foreign / Item)
+                        Details (Date / Status / Foreign)
                         <svg class="w-3 h-3 ml-1 transition group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"></path></svg>
                     </summary>
                     <div class="pt-4 space-y-4">
                         <div>
-                            <label class="block text-[10px] text-gray-400 uppercase font-bold mb-1">交易日期 (Date)</label>
-                            <input type="date" v-model="entry.date" 
-                                   class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none focus:bg-gray-100">
+                            <label class="block text-[10px] text-gray-400 uppercase font-bold mb-1">Date</label>
+                            <input type="date" v-model="entry.date" class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none">
                         </div>
 
-                        <input type="text" v-model="entry.itemName" placeholder="Item Name" 
-                               class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none">
+                        <div>
+                            <label class="block text-[10px] text-gray-400 uppercase font-bold mb-2">Status</label>
+                            <div class="flex gap-2">
+                                <button v-for="s in ['Pending', 'Delivered', '已取']" :key="s"
+                                        @click="entry.status = s"
+                                        :class="entry.status === s ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-400'"
+                                        class="flex-1 py-2 rounded-lg text-[10px] font-bold transition-all">
+                                    {{ s }}
+                                </button>
+                            </div>
+                        </div>
+
+                        <input type="text" v-model="entry.itemName" placeholder="Item Name" class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none">
                         
                         <div class="flex gap-2">
                             <input type="text" v-model="entry.foreignAmount" placeholder="Foreign Amt" class="flex-1 bg-gray-50 rounded-xl p-3 text-sm outline-none">
@@ -99,24 +109,34 @@
                 </details>
 
                 <button @click="saveEntry" class="w-full bg-black text-white py-4 rounded-2xl font-black shadow-xl active:scale-95 transition-transform text-lg uppercase tracking-widest">
-                    Record Now
+                    {{ isEditing ? 'Update Record' : 'Record Now' }}
                 </button>
+                <button v-if="isEditing" @click="cancelEdit" class="w-full text-gray-400 text-xs font-bold uppercase">Cancel Edit</button>
             </div>
         </div>
 
         <div class="space-y-4">
             <h2 class="text-xs font-black text-gray-400 uppercase tracking-widest px-2">History</h2>
-            <div v-for="(item, index) in sortedHistory" :key="index" class="bg-white p-5 rounded-3xl shadow-sm border border-gray-50 flex justify-between items-center">
+            <div v-for="(item, index) in sortedHistory" :key="item.id || index" class="bg-white p-5 rounded-3xl shadow-sm border border-gray-50 flex justify-between items-center group relative">
                 <div class="flex-1">
                     <div class="flex gap-1 mb-2">
                         <span v-for="t in item.tags" class="text-[8px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-black uppercase">{{ t }}</span>
+                        <span v-if="item.status === 'Pending'" class="text-[8px] bg-orange-100 text-orange-500 px-2 py-0.5 rounded font-black uppercase italic">Pending</span>
                     </div>
                     <div class="font-bold text-gray-800 text-sm mb-1">{{ item.itemName || 'Spending' }}</div>
-                    <div class="text-[10px] text-gray-400 font-bold tracking-tight">{{ item.date }} · {{ item.payment }}</div>
+                    <div class="text-[10px] text-gray-400 font-bold">{{ item.date }} · {{ item.payment }}</div>
                 </div>
-                <div class="text-right ml-4">
+                <div class="text-right flex flex-col items-end">
                     <div class="font-black text-gray-900 text-xl">${{ item.amount }}</div>
                     <div v-if="item.foreignAmount" class="text-[9px] text-gray-400 font-bold uppercase">{{ item.foreignAmount }} {{ item.currency }}</div>
+                    <div class="flex gap-2 mt-2">
+                        <button @click="editRecord(item)" class="text-blue-400 hover:text-blue-600">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                        </button>
+                        <button @click="deleteRecord(item.id)" class="text-red-200 hover:text-red-500">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -128,6 +148,7 @@
         createApp({
             setup() {
                 const fileInput = ref(null);
+                const isEditing = ref(null); // 儲存正在編輯的紀錄 ID
                 const cards = ['MOX Credit', 'HSBC Red', 'SC Smart', 'DBS World'];
                 const availableTags = ['日常', '交際', '慶生', '追星', 'Travel', 'Sub', '線下', 'MD', '課金', '專輯', '應援', 'VIXX', '競', 'Others'];
                 
@@ -147,8 +168,9 @@
                 const getTodayStr = () => new Date().toISOString().split('T')[0];
 
                 const initEntry = () => ({
+                    id: Date.now(),
                     rawAmount: '', amount: 0, tags: [], payment: 'Cash', 
-                    date: getTodayStr(),
+                    date: getTodayStr(), status: 'Delivered',
                     itemName: '', foreignAmount: '', currency: '', remarks: '' 
                 });
 
@@ -162,18 +184,16 @@
                 const monthlyTotal = computed(() => {
                     const currentMonth = new Date().getMonth();
                     const currentYear = new Date().getFullYear();
-                    return history.value
-                        .filter(r => {
-                            const d = new Date(r.date);
-                            return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-                        })
-                        .reduce((sum, r) => sum + r.amount, 0);
+                    return history.value.filter(r => {
+                        const d = new Date(r.date);
+                        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+                    }).reduce((sum, r) => sum + r.amount, 0);
                 });
 
                 const tagStats = computed(() => {
                     const stats = {};
-                    const currentMonth = new Date().getMonth();
-                    history.value.filter(r => new Date(r.date).getMonth() === currentMonth).forEach(r => {
+                    const now = new Date();
+                    history.value.filter(r => new Date(r.date).getMonth() === now.getMonth()).forEach(r => {
                         r.tags.forEach(t => stats[t] = (stats[t] || 0) + r.amount);
                     });
                     return stats;
@@ -181,8 +201,8 @@
 
                 const cardStats = computed(() => {
                     const stats = {};
-                    const currentMonth = new Date().getMonth();
-                    history.value.filter(r => new Date(r.date).getMonth() === currentMonth).forEach(r => {
+                    const now = new Date();
+                    history.value.filter(r => new Date(r.date).getMonth() === now.getMonth()).forEach(r => {
                         if (r.payment !== 'Cash') stats[r.payment] = (stats[r.payment] || 0) + r.amount;
                     });
                     return stats;
@@ -193,17 +213,41 @@
                     catch { entry.value.amount = parseFloat(entry.value.rawAmount) || 0; }
                 };
 
+                const saveEntry = () => {
+                    calcAmount();
+                    if (!entry.value.amount) return;
+                    
+                    if (isEditing.value) {
+                        const index = history.value.findIndex(r => r.id === isEditing.value);
+                        if (index !== -1) history.value.splice(index, 1);
+                    }
+                    
+                    history.value.unshift({ ...entry.value, id: Date.now() });
+                    localStorage.setItem('lazy_records', JSON.stringify(history.value));
+                    cancelEdit();
+                };
+
+                const editRecord = (item) => {
+                    isEditing.value = item.id;
+                    entry.value = { ...item, rawAmount: item.amount.toString() };
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                };
+
+                const cancelEdit = () => {
+                    isEditing.value = null;
+                    entry.value = initEntry();
+                };
+
+                const deleteRecord = (id) => {
+                    if (confirm('Delete this record?')) {
+                        history.value = history.value.filter(r => r.id !== id);
+                        localStorage.setItem('lazy_records', JSON.stringify(history.value));
+                    }
+                };
+
                 const usePreset = (p) => {
-                    entry.value = { 
-                        ...initEntry(), 
-                        rawAmount: p.amount.toString(), 
-                        amount: p.amount, 
-                        tags: [...p.tags], 
-                        payment: p.payment, 
-                        itemName: p.name,
-                        foreignAmount: p.foreignAmount || '',
-                        currency: p.currency || ''
-                    };
+                    cancelEdit();
+                    entry.value = { ...initEntry(), rawAmount: p.amount.toString(), amount: p.amount, tags: [...p.tags], payment: p.payment, itemName: p.name, foreignAmount: p.foreignAmount || '', currency: p.currency || '' };
                 };
 
                 const toggleTag = (tag) => {
@@ -212,20 +256,42 @@
                     else entry.value.tags.push(tag);
                 };
 
-                const saveEntry = () => {
-                    calcAmount();
-                    if (!entry.value.amount) return;
-                    history.value.unshift({ ...entry.value });
-                    localStorage.setItem('lazy_records', JSON.stringify(history.value));
-                    entry.value = initEntry();
+                const exportToCSV = () => {
+                    let csv = "\uFEFFDate,Item,Amount,CurrencyAmount,Currency,Tags,Payment,Status,Remarks\n";
+                    history.value.forEach(r => {
+                        csv += `${r.date},"${r.itemName}",${r.amount},${r.foreignAmount},${r.currency},"${r.tags.join('|')}",${r.payment},${r.status},"${r.remarks}"\n`;
+                    });
+                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement("a");
+                    link.href = URL.createObjectURL(blob);
+                    link.download = `LazyTracker_${new Date().toISOString().split('T')[0]}.csv`;
+                    link.click();
                 };
-              
-                const exportToCSV = () => { /* ... */ };
-                const triggerImport = () => fileInput.value.click();
-                const handleImport = (e) => { /* ... */ };
-                const clearAll = () => { if(confirm("Clear?")) { history.value = []; localStorage.removeItem('lazy_records'); }};
 
-                return { cards, availableTags, presets, entry, sortedHistory, monthlyTotal, tagStats, cardStats, currentMonthName: computed(() => new Date().toLocaleString('default', {month:'short'})), toggleTag, saveEntry, calcAmount, usePreset, exportToCSV, triggerImport, handleImport, clearAll, fileInput };
+                const triggerImport = () => fileInput.value.click();
+                const handleImport = (event) => {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const rows = e.target.result.split("\n").slice(1);
+                        const imported = rows.filter(r => r.trim()).map(row => {
+                            const c = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+                            return {
+                                id: Date.now() + Math.random(),
+                                date: c[0], itemName: c[1].replace(/"/g, ''), amount: parseFloat(c[2]),
+                                foreignAmount: c[3], currency: c[4],
+                                tags: c[5].replace(/"/g, '').split('|').filter(t => t),
+                                payment: c[6], status: c[7], remarks: c[8].replace(/"/g, '')
+                            };
+                        });
+                        history.value = [...imported, ...history.value];
+                        localStorage.setItem('lazy_records', JSON.stringify(history.value));
+                    };
+                    reader.readAsText(file);
+                };
+
+                return { cards, availableTags, presets, entry, sortedHistory, monthlyTotal, tagStats, cardStats, currentMonthName: computed(() => new Date().toLocaleString('default', {month:'short'})), toggleTag, saveEntry, calcAmount, usePreset, exportToCSV, triggerImport, handleImport, clearAll: () => { if(confirm("Clear All?")) { history.value = []; localStorage.removeItem('lazy_records'); }}, fileInput, isEditing, editRecord, cancelEdit, deleteRecord };
             }
         }).mount('#app');
     </script>
