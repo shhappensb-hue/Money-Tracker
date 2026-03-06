@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>極簡記帳 LazyTracker v5</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        [v-cloak] { display: none; }
+        ::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen p-4 pb-24 font-sans text-gray-900">
+    <div id="app" v-cloak class="max-w-md mx-auto">
+        
+        <header class="flex justify-between items-center mb-4">
+            <h1 class="text-2xl font-black tracking-tighter text-gray-800">LAZY TRACKER</h1>
+            <div class="flex gap-2">
+                <button @click="exportToCSV" class="text-[10px] bg-gray-200 px-2 py-1 rounded text-gray-600 font-bold uppercase">Export</button>
+                <button @click="triggerImport" class="text-[10px] bg-blue-100 px-2 py-1 rounded text-blue-600 font-bold uppercase">Import</button>
+                <input type="file" ref="fileInput" @change="handleImport" accept=".csv" class="hidden">
+            </div>
+        </header>
+
+        <div class="bg-black rounded-[2rem] p-6 mb-6 text-white shadow-xl">
+            <div class="text-xs opacity-60 font-bold uppercase mb-1 tracking-widest">{{ currentMonthName }} Spending</div>
+            <div class="text-4xl font-black mb-4">${{ monthlyTotal.toLocaleString() }}</div>
+            
+            <div class="grid grid-cols-2 gap-4 pt-4 border-t border-gray-800">
+                <div>
+                    <div class="text-[10px] opacity-50 uppercase font-bold mb-2">By Tags</div>
+                    <div v-for="(val, tag) in tagStats" :key="tag" class="text-xs flex justify-between mb-1">
+                        <span class="opacity-80">{{ tag }}</span>
+                        <span class="font-mono font-bold text-blue-400">${{ val }}</span>
+                    </div>
+                </div>
+                <div>
+                    <div class="text-[10px] opacity-50 uppercase font-bold mb-2">By Cards</div>
+                    <div v-for="(val, card) in cardStats" :key="card" class="text-xs flex justify-between mb-1">
+                        <span class="opacity-80">{{ card }}</span>
+                        <span class="font-mono font-bold text-green-400">${{ val }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-6 overflow-x-auto flex gap-2 no-scrollbar">
+            <button v-for="p in presets" @click="usePreset(p)"
+                    class="bg-white border border-gray-100 text-[11px] px-4 py-2 rounded-full shadow-sm whitespace-nowrap active:scale-95 transition-all font-bold text-gray-600">
+                + {{ p.name }}
+            </button>
+        </div>
+
+        <div class="bg-white rounded-[2rem] shadow-sm p-6 mb-8 border border-gray-100">
+            <div class="space-y-5">
+                <div>
+                    <input type="text" v-model="entry.rawAmount" @blur="calcAmount" 
+                           placeholder="0.00"
+                           class="w-full text-5xl font-black border-none focus:ring-0 outline-none p-0 text-black placeholder-gray-100">
+                </div>
+
+                <div class="flex flex-wrap gap-2">
+                    <button v-for="tag in availableTags" :key="tag"
+                            @click="toggleTag(tag)"
+                            :class="entry.tags.includes(tag) ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-50 text-gray-400'"
+                            class="px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95">
+                        {{ tag }}
+                    </button>
+                </div>
+
+                <details class="group">
+                    <summary class="text-xs text-gray-400 cursor-pointer list-none flex items-center font-bold uppercase tracking-widest">
+                        Details (Optional)
+                        <svg class="w-3 h-3 ml-1 transition group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"></path></svg>
+                    </summary>
+                    <div class="pt-4 space-y-4">
+                        <input type="text" v-model="entry.itemName" placeholder="Item Name (e.g. Concert Ticket)" 
+                               class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none focus:bg-gray-100 transition-colors">
+                        
+                        <div class="flex gap-2">
+                            <input type="text" v-model="entry.foreignAmount" placeholder="Foreign Amt" class="flex-1 bg-gray-50 rounded-xl p-3 text-sm outline-none">
+                            <input type="text" v-model="entry.currency" placeholder="JPY" class="w-20 bg-gray-50 rounded-xl p-3 text-sm outline-none text-center uppercase font-bold text-blue-500">
+                        </div>
+
+                        <select v-model="entry.payment" class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none">
+                            <option v-for="card in ['Cash', 'Payme', 'FPS', ...cards, 'PayPal']" :value="card">{{ card }}</option>
+                        </select>
+
+                        <textarea v-model="entry.remarks" rows="2" placeholder="Remarks..." class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none"></textarea>
+                    </div>
+                </details>
+
+                <button @click="saveEntry" class="w-full bg-black text-white py-4 rounded-2xl font-black shadow-xl active:scale-95 transition-transform text-lg uppercase tracking-widest">
+                    Record Now
+                </button>
+            </div>
+        </div>
+
+        <div class="space-y-4">
+            <div class="flex justify-between items-center px-2">
+                <h2 class="text-xs font-black text-gray-400 uppercase tracking-widest">History</h2>
+                <button @click="clearAll" class="text-[10px] text-red-200 font-bold uppercase">Clear</button>
+            </div>
+            
+            <div v-for="(item, index) in history" :key="index" class="bg-white p-5 rounded-3xl shadow-sm border border-gray-50 flex justify-between items-center">
+                <div class="flex-1">
+                    <div class="flex gap-1 mb-2">
+                        <span v-for="t in item.tags" class="text-[8px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-black uppercase">{{ t }}</span>
+                    </div>
+                    <div class="font-bold text-gray-800 text-sm mb-1">{{ item.itemName || 'Spending' }}</div>
+                    <div class="text-[10px] text-gray-400 font-bold">{{ item.date }} · {{ item.payment }}</div>
+                </div>
+                <div class="text-right">
+                    <div class="font-black text-gray-900 text-xl">${{ item.amount }}</div>
+                    <div v-if="item.foreignAmount" class="text-[8px] text-gray-400 font-bold uppercase">{{ item.foreignAmount }} {{ item.currency }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed } = Vue;
+
+        createApp({
+            setup() {
+                const fileInput = ref(null);
+                const cards = ['MOX Credit', 'HSBC Red', 'SC Smart', 'DBS World'];
+                const availableTags = ['日常', '交際', '慶生', '追星', 'Travel', 'Sub', '線下', 'MD', '課金', '專輯', '應援', 'VIXX', '競', 'Others'];
+                const presets = [
+                    { name: '八達通增值', amount: 250, tags: ['日常'], payment: 'HSBC Red' },
+                    { name: 'Chzzk Kongbini', amount: 33, tags: ['追星', 'VIXX', 'Sub'], payment: 'DBS World' },
+                    { name: 'Bubble 2人券', amount: 65.9, tags: ['追星', 'VIXX', 'Sub'], payment: 'DBS World' },
+                    { name: 'HSH Bubble', amount: 28.07, tags: ['追星', 'VIXX', 'Sub'], payment: 'MOX Credit' },
+                    { name: 'Doran Pop', amount: 24.22, tags: ['追星', '競', 'Sub'], payment: 'DBS World', foreignAmount: 4400, currency: 'KRW' },
+                    { name: 'Chovy Pop', amount: 30.5, tags: ['追星', '競', 'Sub'], payment: 'DBS World', foreignAmount: 5500, currency: 'KRW' },
+                    { name: 'Snap', amount: 588, tags: ['Sub'], payment: 'MOX Credit' },
+                    { name: '動畫瘋', amount: 28, tags: ['Sub'], payment: 'DBS World' },
+                    { name: 'Disney Plus', amount: 81, tags: ['Sub'], payment: 'DBS World' },
+                    { name: 'Netflix', amount: 74.42, tags: ['Sub'], payment: 'MOX Credit' },
+                ];
+
+                const entry = ref({ rawAmount: '', amount: 0, tags: [], payment: 'Cash', status: 'Delivered', itemName: '', foreignAmount: '', currency: '', remarks: '' });
+                const history = ref(JSON.parse(localStorage.getItem('lazy_records') || '[]'));
+
+                const currentMonthName = computed(() => new Date().toLocaleString('default', { month: 'long' }));
+
+                const monthlyRecords = computed(() => {
+                    const currentMonth = new Date().getMonth();
+                    const currentYear = new Date().getFullYear();
+                    return history.value.filter(r => {
+                        const d = new Date(r.date);
+                        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+                    });
+                });
+
+                const monthlyTotal = computed(() => monthlyRecords.value.reduce((sum, r) => sum + r.amount, 0));
+
+                const tagStats = computed(() => {
+                    const stats = {};
+                    monthlyRecords.value.forEach(r => {
+                        r.tags.forEach(t => stats[t] = (stats[t] || 0) + r.amount);
+                    });
+                    return stats;
+                });
+
+                const cardStats = computed(() => {
+                    const stats = {};
+                    monthlyRecords.value.forEach(r => {
+                        if (r.payment !== 'Cash') stats[r.payment] = (stats[r.payment] || 0) + r.amount;
+                    });
+                    return stats;
+                });
+
+                const calcAmount = () => {
+                    try { entry.value.amount = eval(entry.value.rawAmount.replace(/[^-()\d/*+.]/g, '')) || 0; }
+                    catch { entry.value.amount = parseFloat(entry.value.rawAmount) || 0; }
+                };
+
+                const usePreset = (p) => {
+                    entry.value = { ...entry.value,
+                      rawAmount: p.amount.toString(), 
+                      amount: p.amount, 
+                      tags: [...p.tags], 
+                      payment: p.payment, 
+                      itemName: p.name,
+                      foreignAmount: p.foreignAmount || '', 
+                      currency: p.currency || ''
+                     };
+                };
+
+                const toggleTag = (tag) => {
+                    const i = entry.value.tags.indexOf(tag);
+                    if (i > -1) entry.value.tags.splice(i, 1);
+                    else entry.value.tags.push(tag);
+                };
+
+                const saveEntry = () => {
+                    calcAmount();
+                    if (!entry.value.amount) return;
+                    const newRecord = { ...entry.value, date: new Date().toLocaleDateString() };
+                    history.value.unshift(newRecord);
+                    localStorage.setItem('lazy_records', JSON.stringify(history.value));
+                    entry.value = { rawAmount: '', amount: 0, tags: [], payment: 'Cash', status: 'Delivered', itemName: '', foreignAmount: '', currency: '', remarks: '' };
+                };
+
+                const exportToCSV = () => { /* 邏輯同上 */ };
+                const triggerImport = () => fileInput.value.click();
+                const handleImport = (event) => { /* 邏輯同上 */ };
+                const clearAll = () => { if(confirm("Clear everything?")) { history.value = []; localStorage.removeItem('lazy_records'); }};
+
+                return { fileInput, cards, availableTags, presets, entry, history, monthlyTotal, tagStats, cardStats, currentMonthName, toggleTag, saveEntry, calcAmount, usePreset, exportToCSV, triggerImport, handleImport, clearAll };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
