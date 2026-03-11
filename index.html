@@ -190,17 +190,22 @@
                 const monthlyTotal = computed(() => {
                     const currentMonth = new Date().getMonth();
                     const currentYear = new Date().getFullYear();
-                    return history.value.filter(r => {
+                    const total = history.value.filter(r => {
                         const d = new Date(r.date);
                         return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
                     }).reduce((sum, r) => sum + r.amount, 0);
+    
+                    return parseFloat(total.toFixed(2));
                 });
 
                 const tagStats = computed(() => {
                     const stats = {};
                     const now = new Date();
                     history.value.filter(r => new Date(r.date).getMonth() === now.getMonth()).forEach(r => {
-                        r.tags.forEach(t => stats[t] = (stats[t] || 0) + r.amount);
+                        r.tags.forEach(t => {
+                            const current = stats[t] || 0;
+                            stats[t] = parseFloat((current + r.amount).toFixed(2)); // 新加：累加時修正
+                        });
                     });
                     return stats;
                 });
@@ -209,7 +214,10 @@
                     const stats = {};
                     const now = new Date();
                     history.value.filter(r => new Date(r.date).getMonth() === now.getMonth()).forEach(r => {
-                        if (r.payment !== 'Cash') stats[r.payment] = (stats[r.payment] || 0) + r.amount;
+                        if (r.payment !== 'Cash') {
+                            const current = stats[r.payment] || 0;
+                            stats[r.payment] = parseFloat((current + r.amount).toFixed(2)); // 新加：累加時修正
+                        }
                     });
                     return stats;
                 });
