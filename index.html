@@ -3,146 +3,176 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>極簡記帳 LazyTracker v9</title>
+    <title>LazyTracker v11 - Pro Stats</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         [v-cloak] { display: none; }
         ::-webkit-scrollbar { display: none; }
         input[type="date"] { appearance: none; -webkit-appearance: none; }
+        .nav-active { color: #3b82f6; }
+        .nav-active svg { stroke: #3b82f6; stroke-width: 2.5px; }
     </style>
 </head>
-<body class="bg-gray-50 min-h-screen p-4 pb-24 font-sans text-gray-900">
-    <div id="app" v-cloak class="max-w-md mx-auto">
+<body class="bg-gray-50 min-h-screen pb-24 font-sans text-gray-900">
+    <div id="app" v-cloak class="max-w-md mx-auto p-4">
         
-        <header class="flex justify-between items-center mb-4">
-            <h1 class="text-2xl font-black tracking-tighter text-gray-800">LAZY TRACKER</h1>
-            <div class="flex gap-2">
-                <button @click="exportToCSV" class="text-[10px] bg-gray-200 px-2 py-1 rounded text-gray-600 font-bold uppercase">Export</button>
-                <button @click="triggerImport" class="text-[10px] bg-blue-100 px-2 py-1 rounded text-blue-600 font-bold uppercase">Import</button>
-                <input type="file" ref="fileInput" @change="handleImport" accept=".csv" class="hidden">
-            </div>
-        </header>
-
-        <div class="bg-black rounded-[2rem] p-6 mb-6 text-white shadow-xl">
-            <div class="text-xs opacity-60 font-bold uppercase mb-1 tracking-widest">{{ currentMonthName }} Spending</div>
-            <div class="text-4xl font-black mb-4">${{ monthlyTotal.toLocaleString() }}</div>
-            <div class="grid grid-cols-2 gap-4 pt-4 border-t border-gray-800">
-                <div>
-                    <div class="text-[10px] opacity-50 uppercase font-bold mb-2">By Tags</div>
-                    <div v-for="(val, tag) in tagStats" :key="tag" class="text-xs flex justify-between mb-1">
-                        <span class="opacity-80">{{ tag }}</span>
-                        <span class="font-mono font-bold text-blue-400">${{ val }}</span>
-                    </div>
-                </div>
-                <div>
-                    <div class="text-[10px] opacity-50 uppercase font-bold mb-2">By Cards</div>
-                    <div v-for="(val, card) in cardStats" :key="card" class="text-xs flex justify-between mb-1">
-                        <span class="opacity-80 truncate mr-1">{{ card }}</span>
-                        <span class="font-mono font-bold text-green-400">${{ val }}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="mb-6 overflow-x-auto flex gap-2 no-scrollbar">
-            <button v-for="p in presets" @click="usePreset(p)"
-                    class="bg-white border border-gray-100 text-[11px] px-4 py-2 rounded-full shadow-sm whitespace-nowrap active:scale-95 transition-all font-bold text-gray-600">
-                + {{ p.name }}
+        <nav class="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-gray-100 flex justify-around items-center h-14 z-50 max-w-md mx-auto px-6">
+            <button @click="currentTab = 'tracker'" :class="{'nav-active': currentTab === 'tracker'}" class="flex-1 flex flex-col justify-center items-center gap-1 transition-all text-gray-400">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"></path></svg>
+                <span class="text-[10px] font-bold uppercase tracking-widest">Tracker</span>
             </button>
-        </div>
+            <button @click="currentTab = 'stats'" :class="{'nav-active': currentTab === 'stats'}" class="flex-1 flex flex-col justify-center items-center gap-1 transition-all text-gray-400">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                <span class="text-[10px] font-bold uppercase tracking-widest">Analytics</span>
+            </button>
+        </nav>
 
-        <div class="bg-white rounded-[2rem] shadow-sm p-6 mb-8 border border-gray-100 ring-4 ring-transparent transition-all" :class="isEditing ? 'ring-blue-100 border-blue-200' : ''">
-            <div class="space-y-5">
-                <div class="flex justify-between items-center">
-                    <input type="text" v-model="entry.rawAmount" @blur="calcAmount" placeholder="0.00" class="w-full text-5xl font-black border-none focus:ring-0 outline-none p-0 text-black placeholder-gray-100">
-                    <span v-if="isEditing" class="text-[10px] bg-blue-500 text-white px-2 py-1 rounded-md font-bold">EDITING</span>
+        <div v-show="currentTab === 'tracker'">
+            <header class="flex justify-between items-center mb-4">
+                <h1 class="text-2xl font-black tracking-tighter text-gray-800">LAZY TRACKER</h1>
+                <div class="flex gap-2">
+                    <button @click="exportToCSV" class="text-[10px] bg-gray-200 px-2 py-1 rounded text-gray-600 font-bold uppercase">Export</button>
+                    <button @click="triggerImport" class="text-[10px] bg-blue-100 px-2 py-1 rounded text-blue-600 font-bold uppercase">Import</button>
+                    <input type="file" ref="fileInput" @change="handleImport" accept=".csv" class="hidden">
                 </div>
-                <div class="flex flex-wrap gap-2">
-                    <button v-for="tag in availableTags" :key="tag" @click="toggleTag(tag)" :class="entry.tags.includes(tag) ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-50 text-gray-400'" class="px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95">{{ tag }}</button>
-                </div>
-                <details class="group" :open="isEditing">
-                    <summary class="text-xs text-gray-400 cursor-pointer list-none flex items-center font-bold uppercase tracking-widest">Details <svg class="w-3 h-3 ml-1 transition group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"></path></svg></summary>
-                    <div class="pt-4 space-y-4">
-                        <input type="date" v-model="entry.date" class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none">
-                        <div class="flex gap-2">
-                            <button v-for="s in ['Pending', 'Delivered', '已取']" :key="s" @click="entry.status = s" :class="entry.status === s ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-400'" class="flex-1 py-2 rounded-lg text-[10px] font-bold transition-all">{{ s }}</button>
+            </header>
+
+            <div class="bg-black rounded-[2rem] p-6 mb-6 text-white shadow-xl">
+                <div class="text-xs opacity-60 font-bold uppercase mb-1 tracking-widest">{{ currentMonthName }} Spending</div>
+                <div class="text-4xl font-black mb-4">${{ monthlyTotal.toLocaleString() }}</div>
+                <div class="grid grid-cols-2 gap-4 pt-4 border-t border-gray-800 text-[11px]">
+                    <div>
+                        <div class="opacity-50 uppercase font-bold mb-2 tracking-tighter">By Tags</div>
+                        <div v-for="(val, tag) in tagStats" :key="tag" class="flex justify-between mb-1">
+                            <span class="opacity-80 truncate mr-1">{{ tag }}</span>
+                            <span class="font-mono font-bold text-blue-400">${{ val }}</span>
                         </div>
-                        <input type="text" v-model="entry.itemName" placeholder="Item Name" class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none">
-                        <div class="flex gap-2"><input type="text" v-model="entry.foreignAmount" placeholder="Foreign Amt" class="flex-1 bg-gray-50 rounded-xl p-3 text-sm outline-none"><input type="text" v-model="entry.currency" placeholder="KRW" class="w-20 bg-gray-50 rounded-xl p-3 text-sm outline-none text-center uppercase font-bold text-blue-500"></div>
-                        <select v-model="entry.payment" class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none">
-                            <option v-for="card in ['Cash', 'Payme', 'FPS', ...cards, 'PayPal']" :value="card">{{ card }}</option>
-                        </select>
-                        <textarea v-model="entry.remarks" rows="2" placeholder="Remarks..." class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none"></textarea>
                     </div>
-                </details>
-                <button @click="saveEntry" class="w-full bg-black text-white py-4 rounded-2xl font-black shadow-xl active:scale-95 transition-transform text-lg uppercase tracking-widest">{{ isEditing ? 'Update Record' : 'Record Now' }}</button>
-                <button v-if="isEditing" @click="cancelEdit" class="w-full text-gray-400 text-xs font-bold uppercase">Cancel Edit</button>
-            </div>
-        </div>
-
-        <div class="px-2 mb-4 space-y-3">
-            <div class="relative">
-                <input type="text" v-model="searchQuery" placeholder="搜尋項目或備註..." class="w-full bg-white border border-gray-200 rounded-2xl p-3 pl-10 text-sm outline-none focus:border-blue-400 shadow-sm">
-                <svg class="w-4 h-4 absolute left-3 top-3.5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-            </div>
-            <div class="flex gap-2 overflow-x-auto no-scrollbar">
-                <button @click="togglePendingFilter" :class="onlyPending ? 'bg-orange-500 text-white' : 'bg-orange-50 text-orange-400'" class="px-3 py-1 rounded-full text-[10px] font-bold whitespace-nowrap transition-all uppercase">⏳ Pending Only</button>
-                <div class="w-[1px] bg-gray-200 h-4 self-center"></div>
-                <button @click="filterTag = ''" :class="filterTag === '' ? 'bg-gray-800 text-white' : 'bg-white text-gray-400'" class="px-3 py-1 rounded-full text-[10px] font-bold border border-gray-100 transition-all uppercase">All</button>
-                <button v-for="tag in availableTags" :key="tag" @click="filterTag = (filterTag === tag ? '' : tag)" :class="filterTag === tag ? 'bg-blue-600 text-white' : 'bg-white text-gray-400'" class="px-3 py-1 rounded-full text-[10px] font-bold border border-gray-100 transition-all uppercase whitespace-nowrap">{{ tag }}</button>
-            </div>
-        </div>
-
-        <div class="space-y-4">
-            <div class="flex justify-between items-center px-2">
-                <h2 class="text-xs font-black text-gray-400 uppercase tracking-widest">History ({{ filteredCount }})</h2>
-            </div>
-            
-            <div v-for="(item, index) in pagedHistory" :key="item.id || index" class="bg-white p-5 rounded-3xl shadow-sm border border-gray-50 flex justify-between items-center group">
-                <div class="flex-1">
-                    <div class="flex gap-1 mb-2">
-                        <span v-for="t in item.tags" class="text-[8px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-black uppercase">{{ t }}</span>
-                        <span v-if="item.status === 'Pending'" class="text-[8px] bg-orange-100 text-orange-500 px-2 py-0.5 rounded font-black uppercase italic">Pending</span>
-                    </div>
-                    <div class="font-bold text-gray-800 text-sm mb-1">{{ item.itemName || 'Spending' }}</div>
-                    <div class="text-[10px] text-gray-400 font-bold">{{ item.date }} · {{ item.payment }}</div>
-                </div>
-                <div class="text-right flex flex-col items-end">
-                    <div class="font-black text-gray-900 text-xl">${{ item.amount }}</div>
-                    <div v-if="item.foreignAmount" class="text-[9px] text-gray-400 font-bold uppercase">{{ item.foreignAmount }} {{ item.currency }}</div>
-                    <div class="flex gap-2 mt-2">
-                        <button @click="copyRecord(item)" class="text-green-500" title="Copy Record"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"></path></svg></button>
-                        <button @click="editRecord(item)" class="text-blue-400"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg></button>
-                        <button @click="deleteRecord(item.id)" class="text-red-200"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                    <div>
+                        <div class="opacity-50 uppercase font-bold mb-2 tracking-tighter">By Cards</div>
+                        <div v-for="(val, card) in cardStats" :key="card" class="flex justify-between mb-1">
+                            <span class="opacity-80 truncate mr-1">{{ card }}</span>
+                            <span class="font-mono font-bold text-green-400">${{ val }}</span>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <button v-if="hasMore" @click="pageSize += 20" class="w-full py-4 text-xs font-black text-gray-400 uppercase tracking-[0.2em] border-2 border-dashed border-gray-200 rounded-3xl hover:bg-gray-100 transition-all">
-                Load More Records...
-            </button>
-            <div v-else-if="filteredCount > 0" class="text-center text-[10px] text-gray-300 font-bold uppercase tracking-widest py-4">
-                End of History
+            <div class="mb-6 overflow-x-auto flex gap-2 no-scrollbar">
+                <button v-for="p in presets" @click="usePreset(p)"
+                        class="bg-white border border-gray-100 text-[11px] px-4 py-2 rounded-full shadow-sm whitespace-nowrap active:scale-95 transition-all font-bold text-gray-600">
+                    + {{ p.name }}
+                </button>
             </div>
-            <div v-else class="text-center py-10">
-                <div class="text-gray-200 mb-2">¯\_(ツ)_/¯</div>
-                <div class="text-xs text-gray-400 font-bold uppercase">No records found</div>
+
+            <div class="bg-white rounded-[2rem] shadow-sm p-6 mb-8 border border-gray-100 ring-4 ring-transparent transition-all" :class="isEditing ? 'ring-blue-100 border-blue-200' : ''">
+                <div class="space-y-5">
+                    <div class="flex justify-between items-center">
+                        <input type="text" v-model="entry.rawAmount" @blur="calcAmount" placeholder="0.00" class="w-full text-5xl font-black border-none focus:ring-0 outline-none p-0 text-black placeholder-gray-100">
+                        <span v-if="isEditing" class="text-[10px] bg-blue-500 text-white px-2 py-1 rounded-md font-bold">EDITING</span>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button v-for="tag in availableTags" :key="tag" @click="toggleTag(tag)" :class="entry.tags.includes(tag) ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-50 text-gray-400'" class="px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95">{{ tag }}</button>
+                    </div>
+                    <details class="group" :open="isEditing">
+                        <summary class="text-xs text-gray-400 cursor-pointer list-none flex items-center font-bold uppercase tracking-widest">Details <svg class="w-3 h-3 ml-1 transition group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"></path></svg></summary>
+                        <div class="pt-4 space-y-4">
+                            <input type="date" v-model="entry.date" class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none">
+                            <div class="flex gap-2">
+                                <button v-for="s in ['Pending', 'Delivered', '已取']" :key="s" @click="entry.status = s" :class="entry.status === s ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-400'" class="flex-1 py-2 rounded-lg text-[10px] font-bold transition-all">{{ s }}</button>
+                            </div>
+                            <input type="text" v-model="entry.itemName" placeholder="Item Name" class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none">
+                            <div class="flex gap-2"><input type="text" v-model="entry.foreignAmount" placeholder="Foreign Amt" class="flex-1 bg-gray-50 rounded-xl p-3 text-sm outline-none"><input type="text" v-model="entry.currency" placeholder="KRW" class="w-20 bg-gray-50 rounded-xl p-3 text-sm outline-none text-center uppercase font-bold text-blue-500"></div>
+                            <select v-model="entry.payment" class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none">
+                                <option v-for="card in ['Cash', 'Payme', 'FPS', ...cards, 'PayPal']" :value="card">{{ card }}</option>
+                            </select>
+                            <textarea v-model="entry.remarks" rows="2" placeholder="Remarks..." class="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none"></textarea>
+                        </div>
+                    </details>
+                    <button @click="saveEntry" class="w-full bg-black text-white py-4 rounded-2xl font-black shadow-xl active:scale-95 transition-transform text-lg uppercase tracking-widest">{{ isEditing ? 'Update Record' : 'Record Now' }}</button>
+                    <button v-if="isEditing" @click="cancelEdit" class="w-full text-gray-400 text-xs font-bold uppercase">Cancel Edit</button>
+                </div>
+            </div>
+
+            <div class="px-2 mb-4 space-y-3">
+                <div class="relative">
+                    <input type="text" v-model="searchQuery" placeholder="搜尋項目或備註..." class="w-full bg-white border border-gray-200 rounded-2xl p-3 pl-10 text-sm outline-none focus:border-blue-400 shadow-sm">
+                    <svg class="w-4 h-4 absolute left-3 top-3.5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+                <div class="flex gap-2 overflow-x-auto no-scrollbar">
+                    <button @click="togglePendingFilter" :class="onlyPending ? 'bg-orange-500 text-white' : 'bg-orange-50 text-orange-400'" class="px-3 py-1 rounded-full text-[10px] font-bold whitespace-nowrap transition-all uppercase">⏳ Pending Only</button>
+                    <div class="w-[1px] bg-gray-200 h-4 self-center"></div>
+                    <button @click="filterTag = ''" :class="filterTag === '' ? 'bg-gray-800 text-white' : 'bg-white text-gray-400'" class="px-3 py-1 rounded-full text-[10px] font-bold border border-gray-100 transition-all uppercase">All</button>
+                    <button v-for="tag in availableTags" :key="tag" @click="filterTag = (filterTag === tag ? '' : tag)" :class="filterTag === tag ? 'bg-blue-600 text-white' : 'bg-white text-gray-400'" class="px-3 py-1 rounded-full text-[10px] font-bold border border-gray-100 transition-all uppercase whitespace-nowrap">{{ tag }}</button>
+                </div>
+            </div>
+
+            <div class="space-y-4">
+                <h2 class="text-xs font-black text-gray-400 uppercase tracking-widest px-2">History ({{ filteredCount }})</h2>
+                <div v-for="(item, index) in pagedHistory" :key="item.id || index" class="bg-white p-5 rounded-3xl shadow-sm border border-gray-50 flex justify-between items-center group">
+                    <div class="flex-1">
+                        <div class="flex gap-1 mb-2">
+                            <span v-for="t in item.tags" class="text-[8px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-black uppercase">{{ t }}</span>
+                            <span v-if="item.status === 'Pending'" class="text-[8px] bg-orange-100 text-orange-500 px-2 py-0.5 rounded font-black uppercase italic">Pending</span>
+                        </div>
+                        <div class="font-bold text-gray-800 text-sm mb-1">{{ item.itemName || 'Spending' }}</div>
+                        <div class="text-[10px] text-gray-400 font-bold">{{ item.date }} · {{ item.payment }}</div>
+                    </div>
+                    <div class="text-right flex flex-col items-end">
+                        <div class="font-black text-gray-900 text-xl">${{ item.amount }}</div>
+                        <div v-if="item.foreignAmount" class="text-[9px] text-gray-400 font-bold uppercase">{{ item.foreignAmount }} {{ item.currency }}</div>
+                        <div class="flex gap-2 mt-2">
+                            <button @click="copyRecord(item)" class="text-green-500" title="Copy"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"></path></svg></button>
+                            <button @click="editRecord(item)" class="text-blue-400"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg></button>
+                            <button @click="deleteRecord(item.id)" class="text-red-200"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                        </div>
+                    </div>
+                </div>
+                <button v-if="hasMore" @click="pageSize += 20" class="w-full py-4 text-xs font-black text-gray-400 uppercase tracking-widest border-2 border-dashed border-gray-200 rounded-3xl hover:bg-gray-100 transition-all">Load More...</button>
+            </div>
+        </div>
+
+        <div v-show="currentTab === 'stats'" class="space-y-6">
+            <h1 class="text-2xl font-black tracking-tighter text-gray-800 uppercase mb-4">Analytics</h1>
+
+            <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100">
+                <h2 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">6-Month Spending Trend</h2>
+                <canvas id="trendChart"></canvas>
+            </div>
+
+            <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100">
+                <h2 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">{{ currentMonthName }} Tags Distribution</h2>
+                <div class="relative h-64">
+                    <canvas id="tagPieChart"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 pb-2">
+                <h2 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Monthly Breakdown</h2>
+                <div class="space-y-3">
+                    <div v-for="m in monthlyBreakdown" :key="m.label" class="flex justify-between items-center text-sm font-bold border-b border-gray-50 pb-3 last:border-0">
+                        <span class="text-gray-500 uppercase tracking-tight">{{ m.label }}</span>
+                        <span class="text-gray-900 font-mono">${{ m.total.toLocaleString() }}</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
-        const { createApp, ref, computed, watch } = Vue;
+        const { createApp, ref, computed, watch, nextTick, onMounted } = Vue;
 
         createApp({
             setup() {
+                const currentTab = ref('tracker');
                 const fileInput = ref(null);
                 const isEditing = ref(null);
                 const searchQuery = ref('');
                 const filterTag = ref('');
                 const onlyPending = ref(false);
-                const pageSize = ref(20); // 初始顯示 20 條
+                const pageSize = ref(20);
 
                 const cards = ['MOX Credit', 'HSBC Red', 'SC Smart', 'DBS World'];
                 const availableTags = ['日常', '交際', '慶生', '追星', 'Travel', 'Sub', '線下', 'MD', '課金', '專輯', '應援', 'VIXX', '競', 'Sports', 'Others'];
@@ -174,26 +204,7 @@
                 const entry = ref(initEntry());
                 const history = ref(JSON.parse(localStorage.getItem('lazy_records') || '[]'));
 
-                // 核心過濾邏輯
-                const filteredHistory = computed(() => {
-                    let res = [...history.value];
-                    if (searchQuery.value) {
-                        const q = searchQuery.value.toLowerCase();
-                        res = res.filter(r => (r.itemName && r.itemName.toLowerCase().includes(q)) || (r.remarks && r.remarks.toLowerCase().includes(q)));
-                    }
-                    if (filterTag.value) res = res.filter(r => r.tags.includes(filterTag.value));
-                    if (onlyPending.value) res = res.filter(r => r.status === 'Pending');
-                    return res.sort((a, b) => new Date(b.date) - new Date(a.date));
-                });
-
-                // 分頁邏輯
-                const pagedHistory = computed(() => filteredHistory.value.slice(0, pageSize.value));
-                const hasMore = computed(() => pageSize.value < filteredHistory.value.length);
-                const filteredCount = computed(() => filteredHistory.value.length);
-
-                // 搜尋或切換 Tag 時重置分頁
-                watch([searchQuery, filterTag, onlyPending], () => pageSize.value = 20);
-
+                // --- 數據統計邏輯 ---
                 const monthlyTotal = computed(() => {
                     const now = new Date();
                     const total = history.value.filter(r => {
@@ -206,7 +217,10 @@
                 const tagStats = computed(() => {
                     const stats = {};
                     const now = new Date();
-                    history.value.filter(r => new Date(r.date).getMonth() === now.getMonth()).forEach(r => {
+                    history.value.filter(r => {
+                        const d = new Date(r.date);
+                        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+                    }).forEach(r => {
                         r.tags.forEach(t => stats[t] = parseFloat(((stats[t] || 0) + r.amount).toFixed(2)));
                     });
                     return stats;
@@ -215,17 +229,94 @@
                 const cardStats = computed(() => {
                     const stats = {};
                     const now = new Date();
-                    history.value.filter(r => new Date(r.date).getMonth() === now.getMonth()).forEach(r => {
+                    history.value.filter(r => {
+                        const d = new Date(r.date);
+                        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+                    }).forEach(r => {
                         if (r.payment !== 'Cash') stats[r.payment] = parseFloat(((stats[r.payment] || 0) + r.amount).toFixed(2));
                     });
                     return stats;
                 });
 
-                const togglePendingFilter = () => onlyPending.value = !onlyPending.value;
+                // 過去 6 個月趨勢數據
+                const monthlyBreakdown = computed(() => {
+                    const results = [];
+                    const now = new Date();
+                    for (let i = 5; i >= 0; i--) {
+                        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                        const label = d.toLocaleString('default', { month: 'short', year: '2-digit' });
+                        const total = history.value
+                            .filter(r => {
+                                const rd = new Date(r.date);
+                                return rd.getMonth() === d.getMonth() && rd.getFullYear() === d.getFullYear();
+                            })
+                            .reduce((sum, r) => sum + r.amount, 0);
+                        results.push({ label, total: parseFloat(total.toFixed(2)) });
+                    }
+                    return results;
+                });
+
+                // --- 圖表實作 ---
+                let charts = { trend: null, pie: null };
+
+                const updateCharts = () => {
+                    const trendCtx = document.getElementById('trendChart');
+                    const pieCtx = document.getElementById('tagPieChart');
+                    if (!trendCtx || !pieCtx) return;
+
+                    if (charts.trend) charts.trend.destroy();
+                    if (charts.pie) charts.pie.destroy();
+
+                    charts.trend = new Chart(trendCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: monthlyBreakdown.value.map(m => m.label),
+                            datasets: [{ label: 'Spending', data: monthlyBreakdown.value.map(m => m.total), backgroundColor: '#000', borderRadius: 8 }]
+                        },
+                        options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { display: false } } } }
+                    });
+
+                    const pieData = tagStats.value;
+                    charts.pie = new Chart(pieCtx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: Object.keys(pieData),
+                            datasets: [{ data: Object.values(pieData), backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'], borderWidth: 0 }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { weight: 'bold', size: 10 } } } } }
+                    });
+                };
+
+                watch(currentTab, async (val) => {
+                    if (val === 'stats') {
+                        await nextTick();
+                        updateCharts();
+                    }
+                });
+
+                // --- 其他功能 (Tracker) ---
+                const filteredHistory = computed(() => {
+                    let res = [...history.value];
+                    if (searchQuery.value) {
+                        const q = searchQuery.value.toLowerCase();
+                        res = res.filter(r => (r.itemName && r.itemName.toLowerCase().includes(q)) || (r.remarks && r.remarks.toLowerCase().includes(q)));
+                    }
+                    if (filterTag.value) res = res.filter(r => r.tags.includes(filterTag.value));
+                    if (onlyPending.value) res = res.filter(r => r.status === 'Pending');
+                    return res.sort((a, b) => new Date(b.date) - new Date(a.date));
+                });
+
+                const pagedHistory = computed(() => filteredHistory.value.slice(0, pageSize.value));
+                const hasMore = computed(() => pageSize.value < filteredHistory.value.length);
+                const filteredCount = computed(() => filteredHistory.value.length);
+
+                watch([searchQuery, filterTag, onlyPending], () => pageSize.value = 20);
+
                 const calcAmount = () => {
                     try { entry.value.amount = eval(entry.value.rawAmount.replace(/[^-()\d/*+.]/g, '')) || 0; }
                     catch { entry.value.amount = parseFloat(entry.value.rawAmount) || 0; }
                 };
+
                 const saveEntry = () => {
                     calcAmount(); if (!entry.value.amount) return;
                     if (isEditing.value) {
@@ -236,31 +327,32 @@
                     localStorage.setItem('lazy_records', JSON.stringify(history.value));
                     cancelEdit();
                 };
+
                 const copyRecord = (item) => {
                     cancelEdit();
-                        entry.value = { 
-                            ...item, 
-                            id: Date.now(), 
-                            date: getTodayStr(),
-                            rawAmount: item.amount.toString() 
-                        };
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                    };
+                    entry.value = { ...item, id: Date.now(), date: getTodayStr(), rawAmount: item.amount.toString() };
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                };
+
                 const editRecord = (item) => {
                     isEditing.value = item.id;
                     entry.value = { ...item, rawAmount: item.amount.toString() };
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                 };
+
                 const cancelEdit = () => { isEditing.value = null; entry.value = initEntry(); };
                 const deleteRecord = (id) => { if (confirm('Delete?')) { history.value = history.value.filter(r => r.id !== id); localStorage.setItem('lazy_records', JSON.stringify(history.value)); } };
                 const usePreset = (p) => { cancelEdit(); entry.value = { ...initEntry(), rawAmount: p.amount.toString(), amount: p.amount, tags: [...p.tags], payment: p.payment, itemName: p.name, foreignAmount: p.foreignAmount || '', currency: p.currency || '' }; };
                 const toggleTag = (tag) => { const i = entry.value.tags.indexOf(tag); if (i > -1) entry.value.tags.splice(i, 1); else entry.value.tags.push(tag); };
+                const togglePendingFilter = () => onlyPending.value = !onlyPending.value;
+
                 const exportToCSV = () => {
                     let csv = "\uFEFFDate,Item,Amount,CurrencyAmount,Currency,Tags,Payment,Status,Remarks\n";
                     history.value.forEach(r => csv += `${r.date},"${r.itemName}",${r.amount},${r.foreignAmount},${r.currency},"${r.tags.join('|')}",${r.payment},${r.status},"${r.remarks}"\n`);
                     const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
                     link.download = `LazyTracker_${new Date().toISOString().split('T')[0]}.csv`; link.click();
                 };
+
                 const triggerImport = () => fileInput.value.click();
                 const handleImport = (e) => {
                     const reader = new FileReader();
@@ -274,7 +366,7 @@
                     reader.readAsText(e.target.files[0]);
                 };
 
-                return { cards, availableTags, presets, entry, pagedHistory, copyRecord, hasMore, pageSize, filteredCount, searchQuery, filterTag, onlyPending, togglePendingFilter, monthlyTotal, tagStats, cardStats, currentMonthName: computed(() => new Date().toLocaleString('default', {month:'short'})), toggleTag, saveEntry, calcAmount, usePreset, exportToCSV, triggerImport, handleImport, fileInput, isEditing, editRecord, cancelEdit, deleteRecord };
+                return { currentTab, cards, availableTags, presets, entry, pagedHistory, copyRecord, hasMore, pageSize, filteredCount, searchQuery, filterTag, onlyPending, togglePendingFilter, monthlyTotal, tagStats, cardStats, monthlyBreakdown, currentMonthName: computed(() => new Date().toLocaleString('default', {month:'short'})), toggleTag, saveEntry, calcAmount, usePreset, exportToCSV, triggerImport, handleImport, fileInput, isEditing, editRecord, cancelEdit, deleteRecord };
             }
         }).mount('#app');
     </script>
